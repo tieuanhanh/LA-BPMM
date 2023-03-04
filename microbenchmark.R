@@ -3,24 +3,78 @@ gammaA = 0.001
 gammaB = 0.001
 fixEffVar = 10^4
 eta = 7
-
-microbenchmark(lapmm(y=seizure.rate, t = t, numUnit=numUnit, obsPerUnit = obsPerUnit, 
-                     numFixEff = numFixEff,
-                     gammaA = 0.001, gammaB = 0.001, fixEffVar = 10^4))
-
-rjags <- function(){
-  jags <- jags.model(file="epilepsy.model.txt",
-                     data = my.data,
-                     inits = my.inits,
-                     n.chains = 3)
-  update(jags,1000)
-  epi.sim <- coda.samples(model = jags,
-                          variable.names = parameters,
-                          n.iter=1500, 
-                          thin=10)
+generate_data <- function(fix.effect, random.intercept, num.unit, obs.per.unit){
+  group = rep(1:num.unit,each=obs.per.unit)
+  n = num.unit*obs.per.unit
+  num.fix.effect = length(fix.effect)
+  set.seed(1)
+  
+  # Design matrix for the random intercept
+  z1 = matrix(rep(1,obs.per.unit), ncol=1)
+  z = kronecker(diag(num.unit), z1)
+  
+  # vector of parameter
+  phi = c(fix.effect, random.intercept)
+  
+  # Design matrix has first column of 1
+  x = matrix(nrow = n, ncol = num.fix.effect)
+  x[,1] = rep(1, n) 
+  
+  for (i in 2:num.fix.effect){
+    x[,i] = runif(n, min = 0, max = 1) - 0.5
+  }
+  t = cbind(x, z)
+  
+  lambda = exp(t%*%phi)
+  
+  #outcome
+  
+  y = rpois(n, lambda = lambda) 
+  
+  data = cbind(group, y, x)
+  return(data)
 }
 
-microbenchmark(rjags)
+fixEffect = c(1,2,3,4,5)
+pRecision = 10
+numUnit = 50
+obsPerUnit = 6
+numFixEff = length(fixEffect)
+set.seed(2)
+randomIntercept = rnorm(numUnit, 0, sd=sqrt(1/pRecision))
+
+microbenchmark(lapmm(y=y, t = t, numUnit=numUnit, obsPerUnit = obsPerUnit, 
+                     numFixEff = numFixEff,
+                     gammaA = 0.5, gammaB = 0.0164, fixEffVar = 10^4))
+
+covMat = diag(rep(c(fixEffVar, 1/eta), times = c(numFixEff,numUnit)))
+
+
+####
+microbenchmark(chol2inv(chol(covMat)), 
+               get_phi_model(phi.start = rep(1,numFixEff+numUnit), 
+                             inv.cov.mat = invCovMat),
+               get_hessian(phiModel, inv.cov.mat = invCovMat),
+               get_gradient(phiModel, inv.cov.mat = invCovMat),
+               chol2inv(chol(hessian)))
+microbenchmark(optimize(get_func_for_eta, c(0, 20), tol = 0.0001, 
+                        gamma.a = gammaA, gamma.b = gammaB, 
+                        fix.eff.var = fixEffVar))
+####
+
+invCovMat<- chol2inv(chol(covMat))
+# estimation of fixed effects and random effects
+z1 = matrix(rep(1,obsPerUnit), ncol=1)
+# z: design matrix of random effect intercept b0
+z = kronecker(diag(numUnit), z1)
+ones = rep(1, length(y))
+t = cbind(ones, t,z)
+t = as.matrix(t)
+phiModel <- get_phi_model(phi.start = rep(1,numFixEff+numUnit), 
+                          inv.cov.mat = invCovMat)
+
+hessian <- get_hessian(phiModel, inv.cov.mat = invCovMat)
+la.var.model <- chol2inv(chol(hessian))
 
 get_minus_log_llh <- function(phi, inv.cov.mat){
   # return minus log likelihood of model given eta and data
@@ -75,14 +129,6 @@ get_phi_model <- function(norm.type = "2", grad.tol = 1e-5,
   return(x)
 }
 
-pre_dat <- function(obsPerUnit, numUnit, y, t){
-  z1 = matrix(rep(1,obsPerUnit), ncol=1)
-  z = kronecker(diag(numUnit), z1)
-  ones = rep(1, length(y))
-  t = cbind(ones, t,z)
-  t = as.matrix(t)
-  return t
-}
 
 get_func_for_eta <- function(eta, gamma.a, gamma.b, fix.eff.var){
   ## Return function of posterior of eta 
@@ -96,32 +142,5 @@ get_func_for_eta <- function(eta, gamma.a, gamma.b, fix.eff.var){
   
   return(funcval)
 }
-covMatMode = diag(rep(c(fixEffVar, 1/eta), times = c(numFixEff,numUnit)))
-phiModel <- get_phi_model(phi.start = rep(1,numFixEff+numUnit), 
-                          inv.cov.mat = invCovMatMode)
-hessianMode <- get_hessian(phiModel, inv.cov.mat = invCovMatMode)
 
-microbenchmark(
-  pre_dat(obsPerUnit, numUnit, y, t),
-  etaMode <- optimize(get_func_for_eta, c(0, 20), tol = 0.0001, 
-                      gamma.a = gammaA, gamma.b = gammaB, fix.eff.var = fixEffVar),
-  phiModel <- get_phi_model(phi.start = rep(1,numFixEff+numUnit), 
-                            inv.cov.mat = invCovMatMode),
-  invCovMatMode <- chol2inv(chol(covMatMode)),
-  hessianMode <- get_hessian(phiModel, inv.cov.mat = invCovMatMode),
-  la.var.model <- chol2inv(chol(hessianMode))
-)
-
-######
-
-
-## Return function of posterior of eta 
-cov.mat = diag(rep(c(fixEffVar, 1/eta1, 1/eta2), times = c(numFixEff,numUnit,numUnit)))
-inv.cov.mat <- chol2inv(chol(cov.mat))
-phi.mode <- get_phi_model(inv.cov.mat = inv.cov.mat)
-H <- get_hessian(phi = phi.mode, inv.cov.mat = inv.cov.mat)
-la.var <- chol2inv(chol(H))
-funcval <- get_minus_log_llh(c(.phi.mode), inv.cov.mat = inv.cov.mat) + 
-  gamma.b * eta - (numUnit/2+gamma.a-1)*log(eta) -1/2* log(det(la.var))
-etaMode <- optimize(get_func_for_eta, c(0, 20), tol = 0.0001, gamma.a = gammaA, gamma.b = gammaB, fix.eff.var = fixEffVar)
 
