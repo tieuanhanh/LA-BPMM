@@ -92,8 +92,8 @@ cat("model
 # Prepare data:
 
 tic()
-N <- length(Total)
-J <- n_distinct(Housecode)
+N <- length(data$Total)
+J <- n_distinct(data$Housecode)
 my.data <- list(rate=data$Total, Settlement = data$Settlement, 
                 TimeSetInt = data$TimeSetInt, Time = data$Time,
                 N = N, J = J, Housecode = as.factor(data$Housecode))
@@ -357,11 +357,11 @@ legend("topright", legend=c("LABPMM-grid",
        col=c("blue", "red", "green", "black"), lty=c(1,2,2,1), cex=0.8)
 
 library(microbenchmark)
-model1_time <- function() labpmm2_ci(y=Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
+model1_time <- function() labpmm2_ci(y=data$Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
                                      gammaA = 0.01, gammaB = 0.01)
-model1a_time <- function() labpmm2(y=Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
+model1a_time <- function() labpmm2(y=data$Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
                                    gammaA = 0.01, gammaB = 0.01)
-model2_time <- function() labpmm2_grid(y=Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
+model2_time <- function() labpmm2_grid(y=data$Total, t = t, r=r, numUnit=numUnit, obsPerUnit = obsPerUnit, 
                                        gammaA = 0.01, gammaB = 0.01)
 model3_time <- function() glmer(Total ~ Settlement +Time + TimeSetInt +(1+Time|Housecode), 
                                 data= data, family="poisson")
