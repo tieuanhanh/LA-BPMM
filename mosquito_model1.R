@@ -115,8 +115,8 @@ cat("model
 # Prepare data:
 
 tic()
-N <- length(Total)
-J <- n_distinct(Housecode)
+N <- length(data$Total)
+J <- n_distinct(data$Housecode)
 my.data <- list(rate=data$Total, Settlement = data$Settlement, 
                 TimeSetInt = data$TimeSetInt, Time = data$Time,
                 N = N, J = J, Housecode = as.factor(data$Housecode))
