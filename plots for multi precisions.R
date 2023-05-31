@@ -292,7 +292,7 @@ post_v1 = exp(log_post_v1_scale)
 post_v1_norm_plot = post_v1/sum(post_v1)
 
 grid_n = 6
-width = 0.25
+width = 0.3
 i = 0
 v1_grid = seq(vMode1 - grid_n/2*width, 
               vMode1 + grid_n/2*width, width)
